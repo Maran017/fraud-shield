@@ -8,6 +8,11 @@ app = Flask(__name__)
 # ✅ Allow CORS requests from your frontend (http://127.0.0.1:5500)
 CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5500"}})  
 
+# ✅ Homepage route
+@app.route('/')
+def home():
+    return "Fraud Shield is live!"
+
 # Store transaction history for fraud detection
 transaction_history = {}
 

@@ -2,28 +2,18 @@ from flask import Flask, render_template, request, jsonify, redirect
 from flask_cors import CORS
 import smtplib
 from email.message import EmailMessage
+from urllib.parse import quote
+import requests  # For shortening URLs
 
-app = Flask(__name__, template_folder="../templates")  # Ensure templates are correctly referenced
-
-# ✅ Allow CORS for frontend hosted on Vercel
+app = Flask(__name__)
 CORS(app)
 
-# ✅ Homepage route (Now serves index.html)
-@app.route('/')
-def home():
-    return render_template('index.html')  # Ensure 'index.html' is inside 'templates' folder
-
-# ✅ Transaction history storage
-transaction_history = {}
-
-# ✅ Email Credentials (Move to environment variables in production)
 EMAIL_ADDRESS = "fraudshieldpdp@gmail.com"
 EMAIL_PASSWORD = "olxo hppx dnhn gknb"
 
-# ✅ Function to send email alerts
 def send_email(to_email, subject, message):
     msg = EmailMessage()
-    msg.set_content(message)
+    msg.set_content(message, subtype="html")
     msg["Subject"] = subject
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = to_email
@@ -36,26 +26,13 @@ def send_email(to_email, subject, message):
     except Exception as e:
         print(f"❌ Email sending failed: {e}")
 
-# ✅ Fraud detection logic
-def detect_fraud(email, amount):
-    is_fraud = False
-    reason = ""
+def shorten_url(long_url):
+    try:
+        response = requests.get(f"https://tinyurl.com/api-create.php?url={long_url}")
+        return response.text
+    except:
+        return long_url  
 
-    if amount > 3000:
-        is_fraud = True
-        reason = "Transaction amount exceeds ₹3000."
-
-    if email in transaction_history:
-        transaction_history[email].append(amount)
-        if len(transaction_history[email]) >= 3:
-            is_fraud = True
-            reason = "Multiple rapid transactions detected."
-    else:
-        transaction_history[email] = [amount]
-
-    return is_fraud, reason
-
-# ✅ API Endpoint for Fraud Detection
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -63,58 +40,42 @@ def predict():
         name = data["cardholder_name"]
         email = data["email"]
         amount = float(data["amount"])
-        card_number = data["card_number"]
         transaction_platform = data["transaction_platform"]
 
-        is_fraud, reason = detect_fraud(email, amount)
+        base_url = "https://fraudshield.vercel.app"
+        encoded_email = quote(email)
+        encoded_amount = quote(str(amount))
 
-        if is_fraud:
-            base_url = "https://fraudshield.vercel.app"
-            approve_link = f"{base_url}/approve?email={email}&amount={amount}"
-            decline_link = f"{base_url}/decline?email={email}&amount={amount}"
+        approve_link = shorten_url(f"{base_url}/approve?email={encoded_email}&amount={encoded_amount}")
+        decline_link = shorten_url(f"{base_url}/decline?email={encoded_email}&amount={encoded_amount}")
 
-            fraud_email_content = f"""
-            🚨 **Fraud Alert!** 🚨
-            Dear {name},
+        fraud_email_content = f"""
+        🚨 <b>Fraud Alert!</b> 🚨<br>
+        Dear {name},<br><br>
 
-            Your transaction of **₹{amount}** for **{transaction_platform}** has been flagged as suspicious.  
-            **Reason:** {reason}  
+        Your transaction of <b>₹{amount}</b> for <b>{transaction_platform}</b> has been flagged as suspicious.<br>
+        <b>Reason:</b> Transaction amount exceeds ₹3000.<br><br>
 
-            ✅ [Approve Transaction]({approve_link})  
-            ❌ [Decline Transaction]({decline_link})  
+        ✅ <a href="{approve_link}" target="_blank">Approve Transaction</a><br>
+        ❌ <a href="{decline_link}" target="_blank">Decline Transaction</a><br><br>
 
-            Regards,  
-            🏦 FraudShield Security Team
-            """
-            send_email(email, "⚠️ Fraud Alert! Approve or Reject", fraud_email_content)
-            return jsonify({"message": "⚠️ Fraud Detected! Approval email sent.", "reason": reason})
-
-        else:
-            normal_email_content = f"""
-            ✅ **Transaction Successful** ✅
-            Dear {name},
-
-            Your card ending in **{card_number[-4:]}** has been used for a purchase at **{transaction_platform}**.  
-            The amount of **₹{amount}** has been successfully spent.
-
-            Regards,  
-            🏦 FraudShield Security Team
-            """
-            send_email(email, "✅ Transaction Approved", normal_email_content)
-            return jsonify({"message": "✅ Transaction Approved."})
+        Regards,<br>
+        🏦 FraudShield Security Team
+        """
+        send_email(email, "⚠️ Fraud Alert! Approve or Reject", fraud_email_content)
+        return jsonify({"message": "⚠️ Fraud Detected! Approval email sent."})
 
     except Exception as e:
         return jsonify({"error": f"Error processing request: {e}"}), 500
 
-# ✅ Approve and Decline Routes
 @app.route("/approve", methods=["GET"])
 def approve_transaction():
     email = request.args.get('email')
     amount = float(request.args.get('amount'))
 
-    confirmation_email_content = f"Your transaction of ₹{amount} has been **approved**."
-    send_email(email, "Transaction Approved", confirmation_email_content)
-    
+    confirmation_email_content = f"Your transaction of ₹{amount} has been <b>approved</b>."
+    send_email(email, "✅ Transaction Approved", confirmation_email_content)
+
     return redirect("https://fraudshield.vercel.app/approved")
 
 @app.route("/decline", methods=["GET"])
@@ -122,11 +83,10 @@ def decline_transaction():
     email = request.args.get('email')
     amount = float(request.args.get('amount'))
 
-    confirmation_email_content = f"Your transaction of ₹{amount} has been **declined**."
-    send_email(email, "Transaction Declined", confirmation_email_content)
-    
+    confirmation_email_content = f"Your transaction of ₹{amount} has been <b>declined</b>."
+    send_email(email, "❌ Transaction Declined", confirmation_email_content)
+
     return redirect("https://fraudshield.vercel.app/declined")
 
-# ✅ Flask App Entry Point
 if __name__ == "__main__":
     app.run()

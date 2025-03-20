@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, render_template, request, jsonify, redirect
 from flask_cors import CORS  # Importing CORS
 import smtplib
 from email.message import EmailMessage
@@ -8,10 +8,10 @@ app = Flask(__name__)
 # ✅ Allow CORS requests from your frontend (http://127.0.0.1:5500)
 CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5500"}})  
 
-# ✅ Homepage route
+# ✅ Homepage route (Now serves index.html)
 @app.route('/')
 def home():
-    return "Fraud Shield is live!"
+    return render_template('index.html')  # Ensure 'index.html' is inside the 'templates' folder
 
 # Store transaction history for fraud detection
 transaction_history = {}

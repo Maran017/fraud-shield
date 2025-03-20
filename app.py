@@ -2,20 +2,23 @@ from flask import Flask, render_template, request, jsonify, redirect
 from flask_cors import CORS
 import smtplib
 from email.message import EmailMessage
-import os
 
-# ✅ Initialize Flask app
-app = Flask(__name__, template_folder="../templates")
+app = Flask(__name__, template_folder="../templates")  # Ensure templates are correctly referenced
 
-# ✅ Allow CORS for frontend
-CORS(app, resources={r"/*": {"origins": "*"}})
+# ✅ Allow CORS for frontend hosted on Vercel
+CORS(app)
 
-# ✅ Transaction history storage (for detecting multiple rapid transactions)
+# ✅ Homepage route (Now serves index.html)
+@app.route('/')
+def home():
+    return render_template('index.html')  # Ensure 'index.html' is inside 'templates' folder
+
+# ✅ Transaction history storage
 transaction_history = {}
 
 # ✅ Email Credentials (Move to environment variables in production)
-EMAIL_ADDRESS = os.getenv("EMAIL_USER", "fraudshieldpdp@gmail.com")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASS", "olxo hppx dnhn gknb")
+EMAIL_ADDRESS = "fraudshieldpdp@gmail.com"
+EMAIL_PASSWORD = "olxo hppx dnhn gknb"
 
 # ✅ Function to send email alerts
 def send_email(to_email, subject, message):
@@ -52,11 +55,6 @@ def detect_fraud(email, amount):
 
     return is_fraud, reason
 
-# ✅ Homepage route
-@app.route('/')
-def home():
-    return render_template('index.html')
-
 # ✅ API Endpoint for Fraud Detection
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -70,9 +68,8 @@ def predict():
 
         is_fraud, reason = detect_fraud(email, amount)
 
-        base_url = "https://fraud-shield-6fb5.vercel.app"  # ✅ Update with correct frontend URL
-
         if is_fraud:
+            base_url = "https://fraudshield.vercel.app"
             approve_link = f"{base_url}/approve?email={email}&amount={amount}"
             decline_link = f"{base_url}/decline?email={email}&amount={amount}"
 
@@ -90,7 +87,7 @@ def predict():
             🏦 FraudShield Security Team
             """
             send_email(email, "⚠️ Fraud Alert! Approve or Reject", fraud_email_content)
-            return jsonify({"message": "⚠️ Fraud Detected! Approval email sent.", "reason": reason}), 200
+            return jsonify({"message": "⚠️ Fraud Detected! Approval email sent.", "reason": reason})
 
         else:
             normal_email_content = f"""
@@ -104,7 +101,7 @@ def predict():
             🏦 FraudShield Security Team
             """
             send_email(email, "✅ Transaction Approved", normal_email_content)
-            return jsonify({"message": "✅ Transaction Approved."}), 200
+            return jsonify({"message": "✅ Transaction Approved."})
 
     except Exception as e:
         return jsonify({"error": f"Error processing request: {e}"}), 500
@@ -113,29 +110,23 @@ def predict():
 @app.route("/approve", methods=["GET"])
 def approve_transaction():
     email = request.args.get('email')
-    amount = request.args.get('amount')
-
-    if not email or not amount:
-        return jsonify({"error": "Missing email or amount parameters"}), 400
+    amount = float(request.args.get('amount'))
 
     confirmation_email_content = f"Your transaction of ₹{amount} has been **approved**."
     send_email(email, "Transaction Approved", confirmation_email_content)
-
-    return redirect("https://fraud-shield-6fb5.vercel.app/approved")
+    
+    return redirect("https://fraudshield.vercel.app/approved")
 
 @app.route("/decline", methods=["GET"])
 def decline_transaction():
     email = request.args.get('email')
-    amount = request.args.get('amount')
-
-    if not email or not amount:
-        return jsonify({"error": "Missing email or amount parameters"}), 400
+    amount = float(request.args.get('amount'))
 
     confirmation_email_content = f"Your transaction of ₹{amount} has been **declined**."
     send_email(email, "Transaction Declined", confirmation_email_content)
-
-    return redirect("https://fraud-shield-6fb5.vercel.app/declined")
+    
+    return redirect("https://fraudshield.vercel.app/declined")
 
 # ✅ Flask App Entry Point
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
